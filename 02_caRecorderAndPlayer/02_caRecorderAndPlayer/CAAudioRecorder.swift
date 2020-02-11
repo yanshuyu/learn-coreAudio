@@ -227,13 +227,10 @@ class CAAudioRecorder {
     
     
     deinit {
-        if let queue = self.audioQueue {
-            AudioQueueDispose(queue, true)
-        }
-        if let file = self.outputFileID {
-            AudioFileClose(file)
-        }
+        cleanup()
     }
+    
+    
     
     //
     // MARK: - audio recorder control
@@ -372,7 +369,7 @@ class CAAudioRecorder {
             return .codecError(reason: "can't access codec")
             
         case kAudioQueueErr_BufferEmpty:
-            return .bufferError(reason: "buffer is empty")
+            return .bufferError(reason: "buffer is empty or buffer size is invalided")
         case kAudioQueueErr_InvalidBuffer:
             return .bufferError(reason: "buffer not belong to queue")
         case kAudioQueueErr_RecordUnderrun:
@@ -468,20 +465,15 @@ class CAAudioRecorder {
     
         for _ in 0..<self.audioQueueBufferCount {
             var queueBufferRef: AudioQueueBufferRef?
-            let result = AudioQueueAllocateBuffer(self.audioQueue!,
+            var result = AudioQueueAllocateBuffer(self.audioQueue!,
                                                   bufferSize,
                                                   &queueBufferRef)
             if result == kAudio_ParamError {
-                defer {
-                     AudioQueueDispose(self.audioQueue!, true)
-                 }
-                throw CAAudioRecordeError.bufferError(reason: "buffer size error")
+                result = kAudioQueueErr_BufferEmpty
             }
             
             if let error = callSuccess(withCode: result) {
-                defer {
-                    AudioQueueDispose(self.audioQueue!, true)
-                }
+                cleanup()
                 throw error
             }
             
@@ -489,14 +481,22 @@ class CAAudioRecorder {
                                                                          queueBufferRef!,
                                                                          0,
                                                                          nil)) {
-                defer {
-                    AudioQueueDispose(self.audioQueue!, true)
-                }
+                cleanup()
                 throw error
             }
         }
     }
     
+    //
+    // clean up
+    private func cleanup() {
+        if let queue = self.audioQueue {
+            AudioQueueDispose(queue, true)
+        }
+        if let file = self.outputFileID {
+            AudioFileClose(file)
+        }
+    }
     
     //
     // copy audio queue's audio converter magic cookie data to audio file
