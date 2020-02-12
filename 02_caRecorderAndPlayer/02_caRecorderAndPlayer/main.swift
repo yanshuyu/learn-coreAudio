@@ -13,30 +13,71 @@ import CoreGraphics
 func handleRecorderError(_ error: CAAudioRecorder.CAAudioRecordeError) {
     switch error {
     case .dataFormatError(let reason):
-        print("data ftm error: \(reason)")
-    
+        print("recorder error, data ftm error: \(reason)")
+        break
+        
     case .fileFormatError(let reason):
-        print("file ftm error: \(reason)")
+        print("recorder error,file ftm error: \(reason)")
+        break
         
     case .hardwareError(let reason):
-        print("hardware error: \(reason)")
-    
+        print("recorder error,hardware error: \(reason)")
+        break
+        
     case .bufferError(let reaon):
-        print("buffer error: \(reaon)")
+        print("recorder error, buffer error: \(reaon)")
+        break
         
     case .queueError(let reason):
-        print("queue error: \(reason)")
+        print("recorder error, queue error: \(reason)")
+        break
         
     case .codecError(let reason):
-        print("codec error: \(reason)")
+        print("recorder error, codec error: \(reason)")
+        break
         
     case .unknowedError:
-        print("unknow error")
+        print("recorder error, unknow error")
+        break
         
     default:
-        print("other error")
+        print("recorder error, other error")
+        break
     }
 }
+
+func handlePlayerError(_ error: CAAudioPlayer.CAAudioPlayerError) {
+    switch error {
+    case .fileNotFound:
+        print("player error: file not found")
+        break
+    
+    case .invaildDevice:
+        print("player error: invalid device")
+        break
+        
+    case .permissionError:
+        print("player error: permission error")
+        break
+        
+    case .unsupportedFileType:
+        print("player error: unsupported file type")
+        break
+        
+    case .unsupportedDataFormat:
+        print("player error: unsupported data format")
+        break
+        
+    case .unknowedError:
+        print("player error: unknowed error")
+        break
+        
+    default:
+        print("player error: other error")
+        break
+    }
+}
+
 
 class RecorderDelegate: CAAudioRecorderDelegate {
     func audioRecorder(_ recorder: CAAudioRecorder, finishSuccess: Bool, outputFileURL: URL?, error: CAAudioRecorder.CAAudioRecordeError?) {
@@ -81,21 +122,34 @@ class RecorderDelegate: CAAudioRecorderDelegate {
 do {
     let lpcmRUL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_lpcm.caf")
     let aacURL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_aac.aac")
-    let myRecorderDelegate = RecorderDelegate()
-    let myRecoder = try CAAudioRecorder(compressedFormatSettings: nil, outputFileURL: aacURL)
-    myRecoder.delegate = myRecorderDelegate
-    if myRecoder.prepareToRecord() {
-        myRecoder.start()
-        print("recording...")
-        getchar()
-        myRecoder.stop()
-    }
+    let songURL = URL(fileURLWithPath: "/Users/sy/Desktop/Albert Vishi & Skylar Grey - Love The Way You Lie (Remix).mp3")
+//    let myRecorderDelegate = RecorderDelegate()
+//    let myRecoder = try CAAudioRecorder(compressedFormatSettings: nil, outputFileURL: aacURL)
+//    myRecoder.delegate = myRecorderDelegate
+//    if myRecoder.prepareToRecord() {
+//        myRecoder.start()
+//        print("recording(press any key to stop)...")
+//        getchar()
+//        myRecoder.stop()
+//    }
     
-
+    let myPlayer = try CAAudioPlayer(url: songURL)
+    myPlayer.start()
+    print("Playing(press any key to stop)..")
+    getchar()
+    myPlayer.stop()
     
     
     
 } catch let error as CAAudioRecorder.CAAudioRecordeError {
     handleRecorderError(error)
+    exit(-100)
+} catch let error as CAAudioPlayer.CAAudioPlayerError {
+    handlePlayerError(error)
+    exit(-1000)
+} catch {
+    print("catch unknowed error: \(error)")
+    exit(-1)
 }
+
 
