@@ -47,7 +47,6 @@ class CAAudioPlayer {
     
     private var audioQueue: AudioQueueRef?
     private let queueBufferCount = 3
-    private var queueBuffersToFill: [AudioQueueBufferRef]?
     private var playerContext = PlayerContext()
     private var isPrepared = false
     
@@ -344,15 +343,7 @@ class CAAudioPlayer {
         return nil
     }
     
-    private func cleanup() {
-        //AudioQueueDispose() does this job ??
-//        if let queueBffersToFill = self.queueBuffersToFill, queueBffersToFill.count > 0, let aq = self.audioQueue {
-//            queueBffersToFill.forEach {
-//                AudioQueueFreeBuffer(aq, $0)
-//            }
-//        }
-        self.queueBuffersToFill = nil
-    
+    private func cleanup() {    
         self.playerContext.aspdForReadedPacks?.deallocate()
         self.playerContext.aspdForReadedPacks = nil
         

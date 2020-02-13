@@ -80,7 +80,7 @@ func handlePlayerError(_ error: CAAudioPlayer.CAAudioPlayerError) {
 
 
 class RecorderDelegate: CAAudioRecorderDelegate {
-    func audioRecorder(_ recorder: CAAudioRecorder, finishSuccess: Bool, outputFileURL: URL?, error: CAAudioRecorder.CAAudioRecordeError?) {
+    func audioRecorder(_ recorder: CAAudioRecorder, finishSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?) {
         print("audio recorder finish success: \(finishSuccess)")
         if let error = error {
             handleRecorderError(error)
@@ -123,21 +123,21 @@ do {
     let lpcmRUL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_lpcm.caf")
     let aacURL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_aac.aac")
     let songURL = URL(fileURLWithPath: "/Users/sy/Desktop/Albert Vishi & Skylar Grey - Love The Way You Lie (Remix).mp3")
-//    let myRecorderDelegate = RecorderDelegate()
-//    let myRecoder = try CAAudioRecorder(compressedFormatSettings: nil, outputFileURL: aacURL)
-//    myRecoder.delegate = myRecorderDelegate
-//    if myRecoder.prepareToRecord() {
-//        myRecoder.start()
-//        print("recording(press any key to stop)...")
-//        getchar()
-//        myRecoder.stop()
-//    }
+    let myRecorderDelegate = RecorderDelegate()
+    let myRecoder = try CAAudioRecorder(compressedFormatSettings: nil, outputFileURL: lpcmRUL)
+    myRecoder.delegate = myRecorderDelegate
+    if myRecoder.prepareToRecord() {
+        myRecoder.start()
+        print("recording(press any key to stop)...")
+        getchar()
+        myRecoder.stop()
+    }
     
-    let myPlayer = try CAAudioPlayer(url: songURL)
-    myPlayer.start()
-    print("Playing(press any key to stop)..")
-    getchar()
-    myPlayer.stop()
+//    let myPlayer = try CAAudioPlayer(url: songURL)
+//    myPlayer.start()
+//    print("Playing(press any key to stop)..")
+//    getchar()
+//    myPlayer.stop()
     
     
     
