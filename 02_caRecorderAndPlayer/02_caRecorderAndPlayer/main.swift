@@ -123,21 +123,26 @@ do {
     let lpcmRUL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_lpcm.caf")
     let aacURL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_aac.aac")
     let songURL = URL(fileURLWithPath: "/Users/sy/Desktop/Albert Vishi & Skylar Grey - Love The Way You Lie (Remix).mp3")
-    let myRecorderDelegate = RecorderDelegate()
-    let myRecoder = try CAAudioRecorder(compressedFormatSettings: nil, outputFileURL: lpcmRUL)
-    myRecoder.delegate = myRecorderDelegate
-    if myRecoder.prepareToRecord() {
-        myRecoder.start()
-        print("recording(press any key to stop)...")
-        getchar()
-        myRecoder.stop()
-    }
+//    let myRecorderDelegate = RecorderDelegate()
+//    let myRecoder = try CAAudioRecorder(uncompressedFormatSettings: nil, outputFileURL: lpcmRUL)
+//    myRecoder.delegate = myRecorderDelegate
+//    if myRecoder.prepareToRecord() {
+//        myRecoder.start()
+//        print("recording(press any key to stop)...")
+//        getchar()
+//        myRecoder.stop()
+//    }
     
-//    let myPlayer = try CAAudioPlayer(url: songURL)
-//    myPlayer.start()
-//    print("Playing(press any key to stop)..")
-//    getchar()
-//    myPlayer.stop()
+    let myPlayer = try CAAudioPlayer(url: songURL)
+    myPlayer.play()
+    myPlayer.volume = 0.9
+    myPlayer.rate = 0.5
+    print("volume: \(myPlayer.volume)")
+    print("rate: \(myPlayer.rate)")
+    print("Playing(press any key to stop)..")
+    
+    getchar()
+    myPlayer.stop()
     
     
     

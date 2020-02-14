@@ -286,7 +286,7 @@ class CAAudioRecorder {
     
     @discardableResult
     public func stop() -> Bool {
-        if let error = callSuccess(withCode: AudioQueueStop(self.audioQueue!, true)) {
+        if let error = callSuccess(withCode: AudioQueueStop(self.audioQueue!, false)) {
             self.delegate?.addioRecorder(self, stopSuccess: false, error: error)
             return false
         }
