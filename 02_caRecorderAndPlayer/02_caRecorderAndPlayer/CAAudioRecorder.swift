@@ -9,14 +9,6 @@ import Foundation
 import AudioToolbox
 import AVFoundation
 
-protocol CAAudioRecorderDelegate: AnyObject {
-    func audioRecorder(_ recorder: CAAudioRecorder, prepareSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?)
-    func audioRecorder(_ recorder: CAAudioRecorder, startSucces: Bool, error: CAAudioRecorder.CAAudioRecordeError?)
-    func audioRecorder(_ recorder: CAAudioRecorder, pauseSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?)
-    func addioRecorder(_ recorder: CAAudioRecorder, stopSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?)
-    func audioRecorder(_ recorder: CAAudioRecorder, finishSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?)
-}
-
 
 class CAAudioRecorder {
     public enum CAAudioRecordeError: Error {
@@ -30,68 +22,30 @@ class CAAudioRecorder {
         case unknowedError
     }
     
-    private class RecorderContext {
+    public class RecorderContext {
+        weak var recorder: CAAudioRecorder?
         var outputFileID: AudioFileID?
         var outputFileWriteIndex: Int64 = 0
-        var isRecording: Bool = false
         
         // dumo info for debuging
         var debugLogger: TextLogger?
     }
 
     public weak var delegate: CAAudioRecorderDelegate?
-    
     private var audioQueue: AudioQueueRef?
     private let audioQueueBufferCount = 3    
     private var outputFileID: AudioFileID? {
-        didSet {
-            self.recorderContext.outputFileID = self.outputFileID
+        get {
+            return self.recorderContext.outputFileID
+        }
+        set {
+            self.recorderContext.outputFileID = newValue
         }
     }
     private var outputFileURL: URL?
     private var recorderContext = RecorderContext()
-    public static var audioQueueCallback: AudioQueueInputCallback = { (inUserData, inAQ, inAQBuffer, inStartTime, inNumberASPD, inASPD) in
-        var recorderContext = inUserData!.bindMemory(to: RecorderContext.self, capacity: 1).pointee
-        guard let outputFileID = recorderContext.outputFileID else {
-            return
-        }
-        
-        if inNumberASPD > 0 {
-            recorderContext.debugLogger?.write("[AudioQueueCB] try to write \t\(inNumberASPD) \tpackets at index: \t\(recorderContext.outputFileWriteIndex)\t, time: \(inStartTime.pointee.mHostTime)\n")
-            var ioNumberPacks = inNumberASPD
-            let result = AudioFileWritePackets(outputFileID,
-                                               false,
-                                               inAQBuffer.pointee.mAudioDataByteSize,
-                                               inASPD,
-                                               recorderContext.outputFileWriteIndex,
-                                               &ioNumberPacks,
-                                               inAQBuffer.pointee.mAudioData)
-            if result == noErr {
-                recorderContext.outputFileWriteIndex += Int64(ioNumberPacks)
-                recorderContext.debugLogger?.write("[AudioQueueCB] success to write \t\(ioNumberPacks)\t audio packets, total written \t\(recorderContext.outputFileWriteIndex)\t packets\n")
-            } else {
-                recorderContext.debugLogger?.write("[AudioQueueCB] failed to WritePackets (at index: \t\(recorderContext.outputFileWriteIndex)\t, error code: \(result)\n")
-            }
-   
-        }
-        
-        if recorderContext.isRecording {
-            let result = AudioQueueEnqueueBuffer(inAQ,
-                                                 inAQBuffer,
-                                                 0,
-                                                 nil)
-            if result != noErr {
-                recorderContext.debugLogger?.write("[AudioQueueCB] failed to enqueueBuffer (at pack index: \t\(recorderContext.outputFileWriteIndex)\t, error code: \(result)\n")
-            }
-        }
-    }
-    
     private(set) var isPaused: Bool = false
-    private(set) var isRecording: Bool = false {
-        didSet {
-            self.recorderContext.isRecording = self.isRecording
-        }
-    }
+    private(set) var isRecording: Bool = false 
     private var asbdInQueue = AudioStreamBasicDescription()
     
     private var standardUncompressedFmt: AudioStreamBasicDescription {
@@ -110,8 +64,8 @@ class CAAudioRecorder {
     private var standardCompressedFmt: AudioStreamBasicDescription {
         var asbd = AudioStreamBasicDescription()
         asbd.mFormatID = kAudioFormatMPEG4AAC
-        asbd.mChannelsPerFrame = 1
-        asbd.mSampleRate = 44100
+        //asbd.mChannelsPerFrame = 1
+        //asbd.mSampleRate = 44100
         return asbd
     }
 
@@ -125,6 +79,7 @@ class CAAudioRecorder {
         //
         // descrip audio data format
         var asbd = self.standardUncompressedFmt
+        asbd.mSampleRate = (try? getDefualtInputDeviceSampleRate()) ?? 44100
         if let userSettings = uncompressedFormatSettings {
             if let bitDepth = userSettings[AVLinearPCMBitDepthKey] as? UInt32 {
                 asbd.mBitsPerChannel = bitDepth
@@ -166,9 +121,12 @@ class CAAudioRecorder {
     
     public init(compressedFormatSettings: [String:Any]?, outputFileURL: URL) throws {
         self.outputFileURL = outputFileURL
+        self.recorderContext.recorder = self
         self.recorderContext.debugLogger = createLogFileAlongside(with: outputFileURL)
+
         
         var asbd = self.standardCompressedFmt
+        asbd.mSampleRate = (try? getDefualtInputDeviceSampleRate()) ?? 0.0
         if let userSettings = compressedFormatSettings {
             if let ftmID = userSettings[AVFormatIDKey] as? UInt32 {
                 asbd.mFormatID = ftmID
@@ -190,6 +148,7 @@ class CAAudioRecorder {
                                            &asbd) {
             throw CAAudioRecordeError.dataFormatError(reason: "can't fill out asbd strut using audio format services api")
         }
+        self.recorderContext.debugLogger?.write("preferred fmt: {\t\(asbd)\t\n}")
         
         do {
             try self.asbdInQueue = setupAudioQueue(with: &asbd)
@@ -198,7 +157,7 @@ class CAAudioRecorder {
         }
         
         self.recorderContext.debugLogger?.write("setup audio queue success.\n")
-        self.recorderContext.debugLogger?.write("audio queue asbd: {\t\(asbdInQueue)\t}\n")
+        self.recorderContext.debugLogger?.write("audio queue fmt: {\t\(asbdInQueue)\t}\n")
         
         do {
             try setupAudioQueueBuffers()
@@ -305,6 +264,96 @@ class CAAudioRecorder {
         return true
     }
 
+   
+    //
+    // clean up
+    private func cleanup() {
+        self.outputFileURL = nil
+        self.asbdInQueue = AudioStreamBasicDescription()
+        self.recorderContext = RecorderContext()
+        
+        if let file = self.outputFileID {
+            AudioFileClose(file)
+            self.outputFileID = nil
+        }
+        
+        if let queue = self.audioQueue {
+            AudioQueueDispose(queue, true)
+            self.audioQueue = nil
+        }
+
+    }
+    
+    private func createLogFileAlongside(with url: URL) -> TextLogger? {
+        var pathComponents = url.pathComponents
+        var dunmpFileName = pathComponents.removeLast()
+        dunmpFileName.removeSubrange(dunmpFileName.lastIndex(of: ".")!..<dunmpFileName.endIndex)
+        dunmpFileName.append("_dump.txt")
+        pathComponents.append(dunmpFileName)
+        let dumpFilePath = pathComponents.joined(separator: "/")
+        return TextLogger(path: dumpFilePath)
+    }
+}
+
+
+fileprivate func audioQueueInputCallback(inUserData: UnsafeMutableRawPointer?,
+                           inQueue: AudioQueueRef,
+                           inBuffer: AudioQueueBufferRef,
+                           inStartTime: UnsafePointer<AudioTimeStamp>,
+                           inNumPackets: UInt32,
+                           inPacketDesc: UnsafePointer<AudioStreamPacketDescription>?) {
+    let recorderContext = inUserData!.bindMemory(to: CAAudioRecorder.RecorderContext.self, capacity: 1).pointee
+    guard let recorder = recorderContext.recorder else { return }
+         guard let outputFileID = recorderContext.outputFileID else { return }
+         
+         if inNumPackets > 0 {
+             recorderContext.debugLogger?.write("[AudioQueueCB] try to write \t\(inNumPackets) \tpackets at index: \t\(recorderContext.outputFileWriteIndex)\t, time: \(inStartTime.pointee.mHostTime)\n")
+             var ioNumberPacks = inNumPackets
+             let result = AudioFileWritePackets(outputFileID,
+                                                false,
+                                                inBuffer.pointee.mAudioDataByteSize,
+                                                inPacketDesc,
+                                                recorderContext.outputFileWriteIndex,
+                                                &ioNumberPacks,
+                                                inBuffer.pointee.mAudioData)
+             if result == noErr {
+                 recorderContext.outputFileWriteIndex += Int64(ioNumberPacks)
+                 recorderContext.debugLogger?.write("[AudioQueueCB] success to write \t\(ioNumberPacks)\t audio packets, total written \t\(recorderContext.outputFileWriteIndex)\t packets\n")
+             } else {
+                 recorderContext.debugLogger?.write("[AudioQueueCB] failed to WritePackets (at index: \t\(recorderContext.outputFileWriteIndex)\t, error code: \(result)\n")
+             }
+    
+         }
+         
+         if recorder.isRecording {
+             let result = AudioQueueEnqueueBuffer(inQueue,
+                                                  inBuffer,
+                                                  0,
+                                                  nil)
+             if result != noErr {
+                 recorderContext.debugLogger?.write("[AudioQueueCB] failed to enqueueBuffer (at pack index: \t\(recorderContext.outputFileWriteIndex)\t, error code: \(result)\n")
+             }
+         }
+}
+
+
+extension AudioStreamBasicDescription: CustomStringConvertible {
+    public var description: String {
+        var desc = ""
+        desc += "formatId: \(self.mFormatID)\n"
+        desc += "sampleRate: \(self.mSampleRate)\n"
+        desc += "bitsPerChannel: \(self.mBitsPerChannel)\n"
+        desc += "channelsPerFrame: \(self.mChannelsPerFrame)\n"
+        desc += "bytesPerFrame: \(self.mBytesPerFrame)\n"
+        desc += "framesPerPack: \(self.mFramesPerPacket)\n"
+        desc += "bytesPerPack: \(self.mBytesPerPacket)"
+        return desc
+    }
+}
+
+
+
+extension CAAudioRecorder {
     //
     // MARK: - helper
     //
@@ -314,51 +363,51 @@ class CAAudioRecorder {
         }
         print(withCode)
         switch withCode {
-        case kAudioFormatUnsupportedDataFormatError:
-            return .dataFormatError(reason: "unspported data format")
+            case kAudioFormatUnsupportedDataFormatError:
+                return .dataFormatError(reason: "unspported data format")
             
-        case kAudioFileUnsupportedFileTypeError:
-            return .fileFormatError(reason: "unspported file type")
-        case kAudioFileUnsupportedDataFormatError:
-            return .fileFormatError(reason: "data format is uncompatible with file type")
-        case kAudioFilePermissionsError:
-            return .permissionError(reason: "file permission error")
+            case kAudioFileUnsupportedFileTypeError:
+                return .fileFormatError(reason: "unspported file type")
+            case kAudioFileUnsupportedDataFormatError:
+                return .fileFormatError(reason: "data format is uncompatible with file type")
+            case kAudioFilePermissionsError:
+                return .permissionError(reason: "file permission error")
             
-        case kAudioQueueErr_CodecNotFound:
-            return .codecError(reason: "codec not found")
-        case kAudioQueueErr_InvalidCodecAccess:
-            return .codecError(reason: "can't access codec")
+            case kAudioQueueErr_CodecNotFound:
+                return .codecError(reason: "codec not found")
+            case kAudioQueueErr_InvalidCodecAccess:
+                return .codecError(reason: "can't access codec")
             
-        case kAudioQueueErr_BufferEmpty:
-            return .bufferError(reason: "buffer is empty or buffer size is invalided")
-        case kAudioQueueErr_InvalidBuffer:
-            return .bufferError(reason: "buffer not belong to queue")
-        case kAudioQueueErr_RecordUnderrun:
-            return .bufferError(reason: "no enqueue buffer to store data")
-            
-            
-        case kAudioQueueErr_Permissions:
-            return .queueError(reason: "queue permisson error")
-        case kAudioQueueErr_InvalidQueueType:
-            return .queueError(reason: "queue type is wrong")
-        case kAudioQueueErr_QueueInvalidated:
-            return .queueError(reason: "queue is invalidated")
-        case kAudioQueueErr_EnqueueDuringReset:
-            return .queueError(reason: "can't enqueue buffer becuase queue is reset, or stop, or dispose now")
-        case kAudioQueueErr_DisposalPending:
-            return .queueError(reason: "queue is appendly dispose asynchronously")
+            case kAudioQueueErr_BufferEmpty:
+                return .bufferError(reason: "buffer is empty or buffer size is invalided")
+            case kAudioQueueErr_InvalidBuffer:
+                return .bufferError(reason: "buffer not belong to queue")
+            case kAudioQueueErr_RecordUnderrun:
+                return .bufferError(reason: "no enqueue buffer to store data")
             
             
-        case kAudioQueueErr_InvalidDevice:
-            return .hardwareError(reason: "invailed device")
-        case kAudioQueueErr_CannotStart:
-            return .hardwareError(reason: "can't not start")
-        case kAudioQueueErr_CannotStartYet:
-            return .hardwareError(reason: "hardware confiugrating, can't not start yet")
-
+            case kAudioQueueErr_Permissions:
+                return .queueError(reason: "queue permisson error")
+            case kAudioQueueErr_InvalidQueueType:
+                return .queueError(reason: "queue type is wrong")
+            case kAudioQueueErr_QueueInvalidated:
+                return .queueError(reason: "queue is invalidated")
+            case kAudioQueueErr_EnqueueDuringReset:
+                return .queueError(reason: "can't enqueue buffer becuase queue is reset, or stop, or dispose now")
+            case kAudioQueueErr_DisposalPending:
+                return .queueError(reason: "queue is appendly dispose asynchronously")
             
-        default:
-            return .unknowedError
+            
+            case kAudioQueueErr_InvalidDevice:
+                return .hardwareError(reason: "invailed device")
+            case kAudioQueueErr_CannotStart:
+                return .hardwareError(reason: "can't not start")
+            case kAudioQueueErr_CannotStartYet:
+                return .hardwareError(reason: "hardware confiugrating, can't not start yet")
+            
+            
+            default:
+                return .unknowedError
         }
     }
     
@@ -366,33 +415,32 @@ class CAAudioRecorder {
     // return audio file format base on file extension
     private func audioFileFormatID(with url: URL) -> AudioFileTypeID? {
         switch url.pathExtension {
-        case "caf":
-            return kAudioFileCAFType
-        case "aac":
-            return kAudioFileAAC_ADTSType
-        case "mp3":
-            return kAudioFileMP3Type
-        case "flac":
-            return kAudioFileFLACType
-        case "wave":
-            return kAudioFileWAVEType
-        case "aif":
-            return kAudioFileAIFFType
-        case "m4a":
-            return kAudioFileM4AType
-        default:
-            return nil
+            case "caf":
+                return kAudioFileCAFType
+            case "aac":
+                return kAudioFileAAC_ADTSType
+            case "mp3":
+                return kAudioFileMP3Type
+            case "flac":
+                return kAudioFileFLACType
+            case "wave":
+                return kAudioFileWAVEType
+            case "aif":
+                return kAudioFileAIFFType
+            case "m4a":
+                return kAudioFileM4AType
+            default:
+                return nil
         }
     }
-    
     
     //
     // setup audio queue
     @discardableResult
     private func setupAudioQueue(with format: inout AudioStreamBasicDescription) throws -> AudioStreamBasicDescription {
-
+        
         var result = AudioQueueNewInput(&format,
-                                        CAAudioRecorder.audioQueueCallback,
+                                        audioQueueInputCallback(inUserData:inQueue:inBuffer:inStartTime:inNumPackets:inPacketDesc:),
                                         &self.recorderContext,
                                         nil,
                                         nil,
@@ -470,27 +518,8 @@ class CAAudioRecorder {
             numPacks = frames / fmt.mFramesPerPacket
         }
         numPacks = numPacks > 0 ? numPacks : 1
-    
+        
         return numPacks * packSize
-    }
-    
-    //
-    // clean up
-    private func cleanup() {
-        self.outputFileURL = nil
-        self.asbdInQueue = AudioStreamBasicDescription()
-        self.recorderContext = RecorderContext()
-        
-        if let file = self.outputFileID {
-            AudioFileClose(file)
-            self.outputFileID = nil
-        }
-        
-        if let queue = self.audioQueue {
-            AudioQueueDispose(queue, true)
-            self.audioQueue = nil
-        }
-
     }
     
     //
@@ -560,102 +589,42 @@ class CAAudioRecorder {
         return sampleRate
     }
     
+    
     //
     // get default input device's buffer size
-//    private func getDefaultInputDeviceBufferSize() throws -> UInt32 {
-//        var deviceId: AudioDeviceID = 0
-//        var propertySz: UInt32 = UInt32(MemoryLayout<AudioDeviceID>.size)
-//        var aopa = AudioObjectPropertyAddress()
-//        aopa.mSelector = kAudioHardwarePropertyDefaultInputDevice
-//        aopa.mScope = kAudioObjectPropertyScopeGlobal
-//        aopa.mElement = kAudioObjectPropertyElementMaster
-//        if let e = checkError(code: AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
-//                                                               &aopa,
-//                                                               0,
-//                                                               nil,
-//                                                               &propertySz,
-//                                                               &deviceId), message: "getDefaultInputDeviceBufferSize (query device)") {
-//            throw e
-//        }
-//
-//        var bufferSz: UInt32 = 0
-//        propertySz = UInt32(MemoryLayout<UInt32>.size)
-//        aopa.mSelector = kAudioDevicePropertyBufferSize
-//        aopa.mScope = kAudioObjectPropertyScopeGlobal
-//        aopa.mElement = kAudioObjectPropertyElementMaster
-//        if let e = checkError(code: AudioObjectGetPropertyData(deviceId,
-//                                                               &aopa,
-//                                                               0,
-//                                                               nil,
-//                                                               &propertySz,
-//                                                               &bufferSz), message: "getDefaultInputDeviceBufferSize (query buffer size)") {
-//            throw e
-//        }
-//
-//        return bufferSz
-//    }
-    
-    private func createLogFileAlongside(with url: URL) -> TextLogger? {
-        var pathComponents = url.pathComponents
-        var dunmpFileName = pathComponents.removeLast()
-        dunmpFileName.removeSubrange(dunmpFileName.lastIndex(of: ".")!..<dunmpFileName.endIndex)
-        dunmpFileName.append("_dump.txt")
-        pathComponents.append(dunmpFileName)
-        let dumpFilePath = pathComponents.joined(separator: "/")
-        return TextLogger(path: dumpFilePath)
-    }
-
+    //    private func getDefaultInputDeviceBufferSize() throws -> UInt32 {
+    //        var deviceId: AudioDeviceID = 0
+    //        var propertySz: UInt32 = UInt32(MemoryLayout<AudioDeviceID>.size)
+    //        var aopa = AudioObjectPropertyAddress()
+    //        aopa.mSelector = kAudioHardwarePropertyDefaultInputDevice
+    //        aopa.mScope = kAudioObjectPropertyScopeGlobal
+    //        aopa.mElement = kAudioObjectPropertyElementMaster
+    //        if let e = checkError(code: AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+    //                                                               &aopa,
+    //                                                               0,
+    //                                                               nil,
+    //                                                               &propertySz,
+    //                                                               &deviceId), message: "getDefaultInputDeviceBufferSize (query device)") {
+    //            throw e
+    //        }
+    //
+    //        var bufferSz: UInt32 = 0
+    //        propertySz = UInt32(MemoryLayout<UInt32>.size)
+    //        aopa.mSelector = kAudioDevicePropertyBufferSize
+    //        aopa.mScope = kAudioObjectPropertyScopeGlobal
+    //        aopa.mElement = kAudioObjectPropertyElementMaster
+    //        if let e = checkError(code: AudioObjectGetPropertyData(deviceId,
+    //                                                               &aopa,
+    //                                                               0,
+    //                                                               nil,
+    //                                                               &propertySz,
+    //                                                               &bufferSz), message: "getDefaultInputDeviceBufferSize (query buffer size)") {
+    //            throw e
+    //        }
+    //
+    //        return bufferSz
+    //    }
     
 }
 
 
-extension Int32 {
-    public var is4CharaterCode: Bool {
-        let firstByte = (self >> 24) & 0x000000ff
-        let secondByte = (self >> 16) & 0x000000ff
-        let thirdByte = (self >> 8) & 0x000000ff
-        let fourthByte = self & 0x000000ff
-        return isprint(firstByte) != 0
-        && isprint(secondByte) != 0
-        && isprint(thirdByte) != 0
-        && isprint(fourthByte) != 0
-    }
-    
-    public var fourCharaters: String? {
-        if self.is4CharaterCode {
-            let firstCharater = Character(Unicode.Scalar(UInt32(self >> 24) & 0x000000ff)!)
-            let secondCharater = Character(Unicode.Scalar(UInt32(self >> 16) & 0x000000ff)!)
-            let thirdCharater = Character(Unicode.Scalar(UInt32(self >> 8) & 0x000000ff)!)
-            let fourthCharater = Character(Unicode.Scalar(UInt32(self & 0x000000ff))!)
-            return String(firstCharater) + String(secondCharater) + String(thirdCharater) + String(fourthCharater)
-        }
-        return nil
-    }
-}
-
-
-
-
-
-extension CAAudioRecorderDelegate {
-    func audioRecorder(_ recorder: CAAudioRecorder, prepareSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?){}
-    func audioRecorder(_ recorder: CAAudioRecorder, startSucces: Bool, error: CAAudioRecorder.CAAudioRecordeError?){}
-    func audioRecorder(_ recorder: CAAudioRecorder, pauseSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?){}
-    func addioRecorder(_ recorder: CAAudioRecorder, stopSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?){}
-    func audioRecorder(_ recorder: CAAudioRecorder, finishSuccess: Bool, error: CAAudioRecorder.CAAudioRecordeError?){}
-}
-
-
-extension AudioStreamBasicDescription: CustomStringConvertible {
-    public var description: String {
-        var desc = ""
-        desc += "formatId: \(self.mFormatID)\n"
-        desc += "sampleRate: \(self.mSampleRate)\n"
-        desc += "bitsPerChannel: \(self.mBitsPerChannel)\n"
-        desc += "channelsPerFrame: \(self.mChannelsPerFrame)\n"
-        desc += "bytesPerFrame: \(self.mBytesPerFrame)\n"
-        desc += "framesPerPack: \(self.mFramesPerPacket)\n"
-        desc += "bytesPerPack: \(self.mBytesPerPacket)"
-        return desc
-    }
-}

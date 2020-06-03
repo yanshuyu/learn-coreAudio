@@ -22,7 +22,8 @@ class CAAudioPlayer {
     
     public static let KCAAudioPlayerPlayToEndNotification = Notification.Name(rawValue: "CAAudioPlayerPlayToEndNotification")
     
-    private class PlayerContext: CustomStringConvertible {
+    public class PlayerContext: CustomStringConvertible {
+        weak var player: CAAudioPlayer?
         var fileID: AudioFileID?
         var readIndex: Int64 = 0
         var totalPacksToRead: Int64 = 0
@@ -30,7 +31,6 @@ class CAAudioPlayer {
         var aqBufferSize: UInt32 = 0
         var playToEnd = false
         var debugLogger: TextLogger?
-        weak var player: CAAudioPlayer?
         
         var description: String {
             var desc = ""
@@ -120,68 +120,6 @@ class CAAudioPlayer {
         
     }
     
-    public static let queueCallback: AudioQueueOutputCallback = { (inUserData, inAQ, inBuffer) in
-        var playerContext = inUserData!.bindMemory(to: CAAudioPlayer.PlayerContext.self, capacity: 1).pointee
-        
-        guard !playerContext.playToEnd, let af = playerContext.fileID else {
-            return
-        }
-        
-        var numPacksToRead = playerContext.expectedNumPacksPerReadCircle
-        if playerContext.readIndex + Int64(numPacksToRead) > playerContext.totalPacksToRead {
-            numPacksToRead = UInt32(playerContext.totalPacksToRead - playerContext.readIndex)
-        }
-        
-        let finishPlayback = {
-            playerContext.playToEnd = true
-            AudioQueueStop(inAQ, false)
-            NotificationCenter.default.post(name: CAAudioPlayer.KCAAudioPlayerPlayToEndNotification, object: playerContext.player)
-            playerContext.debugLogger?.write("[AudioQueueCB] play back reach end, total play packets: \(playerContext.readIndex)")
-        }
-        
-        guard numPacksToRead > 0 else {
-            finishPlayback()
-            return
-        }
-        
-        playerContext.debugLogger?.write("[AudioQueueCB] try to read \(numPacksToRead) packets at index \(playerContext.readIndex)\n")
-        
-        var ioSizeInBytes = playerContext.aqBufferSize
-        var readReslut = AudioFileReadPacketData(af,
-                                            false,
-                                            &ioSizeInBytes,
-                                            inBuffer.pointee.mPacketDescriptions,
-                                            playerContext.readIndex,
-                                            &numPacksToRead,
-                                            inBuffer.pointee.mAudioData)
-        if numPacksToRead > 0 {
-            playerContext.debugLogger?.write("[AudioQueueCB] success to read \(numPacksToRead) packets at index \(playerContext.readIndex)\n")
-            inBuffer.pointee.mAudioDataByteSize = ioSizeInBytes
-            inBuffer.pointee.mPacketDescriptionCount = numPacksToRead
-            
-            let enqueueReslut = AudioQueueEnqueueBuffer(inAQ,
-                                                        inBuffer,
-                                                        0,
-                                                        nil)
-            if enqueueReslut == noErr {
-                playerContext.readIndex += Int64(numPacksToRead)
-                playerContext.debugLogger?.write("[AudioQueueCB] enqueue buffer success at index \(playerContext.readIndex)\n")
-            } else {
-                playerContext.debugLogger?.write("[AudioQueueCB] enqueue buffer failed at index \(playerContext.readIndex), error: \(enqueueReslut)\n")
-                
-            }
-        }
-        
-        if readReslut == kAudioFileEndOfFileError {
-            finishPlayback()
-            return
-        }
-        
-        if readReslut != noErr {
-            playerContext.debugLogger?.write("[AudioQueueCB] failed to read  packets at index \(playerContext.readIndex), error: \(readErr)\n")
-        }
-    }
-    
     
     //
     // MARK: - constructor and descontrocter
@@ -201,6 +139,7 @@ class CAAudioPlayer {
                                          kAudioFilePropertyDataFormat,
                                          &asbdPropertySize,
                                          &asbd){
+            cleanup()
             throw CAAudioPlayerError.unsupportedDataFormat
         }
         
@@ -209,13 +148,14 @@ class CAAudioPlayer {
                                          kAudioFilePropertyAudioDataPacketCount,
                                          &packCountPropertySize,
                                          &playerContext.totalPacksToRead) {
+            cleanup()
             throw CAAudioPlayerError.unsupportedDataFormat
         }
         
         
     
         if let error = callSuccess(withCode: AudioQueueNewOutput(&asbd,
-                                                                 CAAudioPlayer.queueCallback,
+                                                                 audioQueueOutputCallback(_:_:_:),
                                                                  &self.playerContext,
                                                                  nil,
                                                                  nil,
@@ -272,6 +212,7 @@ class CAAudioPlayer {
         cleanup()
     }
     
+    
     //
     // MARK: - player control
     //
@@ -312,7 +253,7 @@ class CAAudioPlayer {
             }
             
             if !playerContext.playToEnd {
-                CAAudioPlayer.queueCallback(&self.playerContext, self.audioQueue!, aqBufferRef!)
+                audioQueueOutputCallback(&self.playerContext, self.audioQueue!, aqBufferRef!)
             }
         }
         
@@ -328,7 +269,7 @@ class CAAudioPlayer {
             return false
         }
         
-        if let error = callSuccess(withCode: AudioQueueStart(self.audioQueue!, nil)) {
+        if let _ = callSuccess(withCode: AudioQueueStart(self.audioQueue!, nil)) {
             return false
         }
         self.isPlaying = true
@@ -339,7 +280,7 @@ class CAAudioPlayer {
     
     @discardableResult
     public func pause() -> Bool {
-        if let error = callSuccess(withCode: AudioQueuePause(self.audioQueue!)) {
+        if let _ = callSuccess(withCode: AudioQueuePause(self.audioQueue!)) {
             return false
         }
         self.isPause = true
@@ -350,7 +291,7 @@ class CAAudioPlayer {
     
     @discardableResult
     public func stop() -> Bool {
-        if let error = callSuccess(withCode: AudioQueueStop(self.audioQueue!, false)) {
+        if let _ = callSuccess(withCode: AudioQueueStop(self.audioQueue!, false)) {
             return false
         }
         
@@ -358,6 +299,101 @@ class CAAudioPlayer {
         return true
     }
     
+   
+    private func cleanup() {
+        self.isPlaying = false
+        self.isPrepared = false
+        
+        if let af = self.playerContext.fileID {
+            AudioFileClose(af)
+            self.playerContext.fileID = nil
+        }
+        
+        if let aq = self.audioQueue {
+            AudioQueueRemovePropertyListener(self.audioQueue!,
+                                               kAudioQueueProperty_IsRunning,
+                                               CAAudioPlayer.propertyProcCallback,
+                                               &self.playerContext)
+            AudioQueueDispose(aq, true)
+            self.audioQueue = nil
+        }
+        
+        self.playerContext = PlayerContext()
+    }
+}
+
+
+
+fileprivate func audioQueueOutputCallback(_ inUserData: UnsafeMutableRawPointer?,
+                              _ inAQ: AudioQueueRef,
+                              _ inBuffer: AudioQueueBufferRef) {
+    
+    let playerContext = inUserData!.bindMemory(to: CAAudioPlayer.PlayerContext.self, capacity: 1).pointee
+    
+    guard let player = playerContext.player,
+        let af = playerContext.fileID ,
+        !playerContext.playToEnd else {
+              return
+          }
+          
+          var numPacksToRead = playerContext.expectedNumPacksPerReadCircle
+          if playerContext.readIndex + Int64(numPacksToRead) > playerContext.totalPacksToRead {
+              numPacksToRead = UInt32(playerContext.totalPacksToRead - playerContext.readIndex)
+          }
+          
+          let finishPlayback = {
+              playerContext.playToEnd = true
+              AudioQueueStop(inAQ, false)
+              NotificationCenter.default.post(name: CAAudioPlayer.KCAAudioPlayerPlayToEndNotification, object: player)
+              playerContext.debugLogger?.write("[AudioQueueCB] play back reach end, total play packets: \(playerContext.readIndex)")
+          }
+          
+          guard numPacksToRead > 0 else {
+              finishPlayback()
+              return
+          }
+          
+          playerContext.debugLogger?.write("[AudioQueueCB] try to read \(numPacksToRead) packets at index \(playerContext.readIndex)\n")
+          
+          var ioSizeInBytes = playerContext.aqBufferSize
+    let readReslut = AudioFileReadPacketData(af,
+                                              false,
+                                              &ioSizeInBytes,
+                                              inBuffer.pointee.mPacketDescriptions,
+                                              playerContext.readIndex,
+                                              &numPacksToRead,
+                                              inBuffer.pointee.mAudioData)
+          if numPacksToRead > 0 {
+              playerContext.debugLogger?.write("[AudioQueueCB] success to read \(numPacksToRead) packets at index \(playerContext.readIndex)\n")
+              inBuffer.pointee.mAudioDataByteSize = ioSizeInBytes
+              inBuffer.pointee.mPacketDescriptionCount = numPacksToRead
+              
+              let enqueueReslut = AudioQueueEnqueueBuffer(inAQ,
+                                                          inBuffer,
+                                                          0,
+                                                          nil)
+              if enqueueReslut == noErr {
+                  playerContext.readIndex += Int64(numPacksToRead)
+                  playerContext.debugLogger?.write("[AudioQueueCB] enqueue buffer success at index \(playerContext.readIndex)\n")
+              } else {
+                  playerContext.debugLogger?.write("[AudioQueueCB] enqueue buffer failed at index \(playerContext.readIndex), error: \(enqueueReslut)\n")
+                  
+              }
+          }
+          
+          if readReslut == kAudioFileEndOfFileError {
+              finishPlayback()
+              return
+          }
+          
+          if readReslut != noErr {
+              playerContext.debugLogger?.write("[AudioQueueCB] failed to read  packets at index \(playerContext.readIndex), error: \(readErr)\n")
+          }
+    
+}
+
+
+extension CAAudioPlayer {
     // MARK:- helper
     private func callSuccess(withCode: OSStatus) -> CAAudioPlayerError? {
         if withCode == noErr {
@@ -365,18 +401,18 @@ class CAAudioPlayer {
         }
         
         switch withCode {
-        case kAudioQueueErr_InvalidDevice:
-            return .invaildDevice
-        case kAudioFileFileNotFoundError, kAudioFileUnspecifiedError:
-            return .fileNotFound
-        case kAudioFilePermissionsError:
-            return .permissionError
-        case kAudioFileUnsupportedFileTypeError:
-            return .unsupportedFileType
-        case kAudioFileUnsupportedDataFormatError, kAudioQueueErr_CodecNotFound, kAudioQueueErr_InvalidCodecAccess, kAudioFormatUnsupportedDataFormatError:
-            return .unsupportedDataFormat
-        default:
-            return .unknowedError
+            case kAudioQueueErr_InvalidDevice:
+                return .invaildDevice
+            case kAudioFileFileNotFoundError, kAudioFileUnspecifiedError:
+                return .fileNotFound
+            case kAudioFilePermissionsError:
+                return .permissionError
+            case kAudioFileUnsupportedFileTypeError:
+                return .unsupportedFileType
+            case kAudioFileUnsupportedDataFormatError, kAudioQueueErr_CodecNotFound, kAudioQueueErr_InvalidCodecAccess, kAudioFormatUnsupportedDataFormatError:
+                return .unsupportedDataFormat
+            default:
+                return .unknowedError
         }
     }
     
@@ -421,9 +457,9 @@ class CAAudioPlayer {
         var mcdSize: UInt32 = 0
         var mcdPropertSize = UInt32(MemoryLayout.size(ofValue: mcdSize))
         let result = AudioFileGetPropertyInfo(self.playerContext.fileID!,
-                                             kAudioFilePropertyMagicCookieData,
-                                             &mcdSize,
-                                             nil)
+                                              kAudioFilePropertyMagicCookieData,
+                                              &mcdSize,
+                                              nil)
         if result == noErr && mcdSize > 0 {
             let mcd = UnsafeMutableRawPointer.allocate(byteCount: Int(mcdSize), alignment: 0)
             defer {
@@ -479,27 +515,9 @@ class CAAudioPlayer {
     }
     
     
-    private func cleanup() {
-        self.isPlaying = false
-        self.isPrepared = false
-        
-        if let af = self.playerContext.fileID {
-            AudioFileClose(af)
-            self.playerContext.fileID = nil
-        }
-        
-        if let aq = self.audioQueue {
-            AudioQueueRemovePropertyListener(self.audioQueue!,
-                                               kAudioQueueProperty_IsRunning,
-                                               CAAudioPlayer.propertyProcCallback,
-                                               &self.playerContext)
-            AudioQueueDispose(aq, true)
-            self.audioQueue = nil
-        }
-        
-        self.playerContext = PlayerContext()
-    }
 }
+
+
 
 
 

@@ -8,6 +8,7 @@
 
 import Foundation
 import CoreGraphics
+import AVFoundation
 
 
 func handleRecorderError(_ error: CAAudioRecorder.CAAudioRecordeError) {
@@ -121,10 +122,11 @@ class RecorderDelegate: CAAudioRecorderDelegate {
 
 do {
     let lpcmRUL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_lpcm.caf")
-    let aacURL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_aac.aac")
-    let songURL = URL(fileURLWithPath: "/Users/sy/Desktop/Albert Vishi & Skylar Grey - Love The Way You Lie (Remix).mp3")
+    let aacURL = URL(fileURLWithPath: "/Users/sy/Desktop/stdftm_aac.caf")
+    let songURL = URL(fileURLWithPath: "/Users/sy/Documents/Learning-AV-Foundation/Chapter 10/FifteenSeconds_Starter/FifteenSeconds/Resources/Audio/Music/01 Star Gazing.m4a")
+    
 //    let myRecorderDelegate = RecorderDelegate()
-//    let myRecoder = try CAAudioRecorder(uncompressedFormatSettings: nil, outputFileURL: lpcmRUL)
+//    let myRecoder = try CAAudioRecorder(compressedFormatSettings:[AVFormatIDKey:kAudioFormatMPEG4AAC], outputFileURL: aacURL)
 //    myRecoder.delegate = myRecorderDelegate
 //    if myRecoder.prepareToRecord() {
 //        myRecoder.start()
@@ -140,7 +142,7 @@ do {
     print("volume: \(myPlayer.volume)")
     print("rate: \(myPlayer.rate)")
     print("Playing(press any key to stop)..")
-    
+
     getchar()
     myPlayer.stop()
     

@@ -11,6 +11,8 @@
 		1152E34623F2A6830061E7CE /* CAAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1152E34523F2A6830061E7CE /* CAAudioPlayer.swift */; };
 		1158883C23AE2DDE00763502 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1158883B23AE2DDE00763502 /* main.swift */; };
 		1158884323B4A73300763502 /* CAAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1158884223B4A73300763502 /* CAAudioRecorder.swift */; };
+		11B884BC2482CD6000A1963A /* CAAudioRecorderDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B884BB2482CD6000A1963A /* CAAudioRecorderDelegate.swift */; };
+		11B884BE2482CF1900A1963A /* Int32+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B884BD2482CF1900A1963A /* Int32+Extension.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -31,6 +33,8 @@
 		1158883823AE2DDE00763502 /* 02_caRecorderAndPlayer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = 02_caRecorderAndPlayer; sourceTree = BUILT_PRODUCTS_DIR; };
 		1158883B23AE2DDE00763502 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		1158884223B4A73300763502 /* CAAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAudioRecorder.swift; sourceTree = "<group>"; };
+		11B884BB2482CD6000A1963A /* CAAudioRecorderDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAudioRecorderDelegate.swift; sourceTree = "<group>"; };
+		11B884BD2482CF1900A1963A /* Int32+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Int32+Extension.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +71,8 @@
 				1158884223B4A73300763502 /* CAAudioRecorder.swift */,
 				1152E34523F2A6830061E7CE /* CAAudioPlayer.swift */,
 				1152E34323F28B940061E7CE /* TextLogger.swift */,
+				11B884BB2482CD6000A1963A /* CAAudioRecorderDelegate.swift */,
+				11B884BD2482CF1900A1963A /* Int32+Extension.swift */,
 			);
 			path = 02_caRecorderAndPlayer;
 			sourceTree = "<group>";
@@ -132,6 +138,8 @@
 				1158884323B4A73300763502 /* CAAudioRecorder.swift in Sources */,
 				1152E34623F2A6830061E7CE /* CAAudioPlayer.swift in Sources */,
 				1158883C23AE2DDE00763502 /* main.swift in Sources */,
+				11B884BC2482CD6000A1963A /* CAAudioRecorderDelegate.swift in Sources */,
+				11B884BE2482CF1900A1963A /* Int32+Extension.swift in Sources */,
 				1152E34423F28B940061E7CE /* TextLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
