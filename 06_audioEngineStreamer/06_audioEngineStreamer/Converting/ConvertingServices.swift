@@ -19,9 +19,23 @@ public protocol ConvertingServices: AnyObject {
     
     init(_ format: AVAudioFormat, _ parser: ParsingServices) throws
     func convert(_ frames: AVAudioFrameCount) throws -> AVAudioPCMBuffer
-    func seek(to packet: AVAudioPacketCount)
+    @discardableResult
+    func seek(to time: TimeInterval) -> Bool
+
 }
 
+
+public enum ConvertingError: Error {
+    case noAvaliableHardware
+    case hardwareWasOccupied
+    case invailedParser
+    case parserMissDataFormat
+    case formatNotSupported
+    case failedToAllocatePCMBuffer
+    case noEnoughData
+    case endOfStream
+    case otherError(OSStatus)
+}
 
 
 extension ConvertingServices {

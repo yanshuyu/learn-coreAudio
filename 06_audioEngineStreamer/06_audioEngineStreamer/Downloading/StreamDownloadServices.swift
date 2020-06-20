@@ -12,7 +12,7 @@ public class StreamDownloadServices: NSObject, DownloadingServices {
         }
     }
     
-    public var status: DownloadingServicesStatus = .unstart {
+    public var status: DownloadingStatus = .unstart {
         didSet {
             os_log(.debug, log: self.logger, "download status did change to: %@", self.status.rawValue)
             self.delegate?.downloadingServices(self, didChangeStatus: self.status)
@@ -30,7 +30,10 @@ public class StreamDownloadServices: NSObject, DownloadingServices {
     }
     
     fileprivate lazy var urlSession: URLSession = {
-        return URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue: nil)
+        let config = URLSessionConfiguration.default
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
     fileprivate var dataTask: URLSessionDataTask?
     
@@ -39,12 +42,13 @@ public class StreamDownloadServices: NSObject, DownloadingServices {
     
     public func start() {
         guard let _ = self.url else { return }
+        
         if self.dataTask == nil {
             self.dataTask = self.urlSession.dataTask(with: self.url!)
         }
         
         switch self.status {
-            case .start, .finish:
+            case .start, .finish, .failed:
                 return
             default:
                 self.status = .start

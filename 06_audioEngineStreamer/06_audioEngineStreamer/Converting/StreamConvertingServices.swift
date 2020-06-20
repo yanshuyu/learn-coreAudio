@@ -16,19 +16,7 @@ let StreamConvertingServicesError_ParserMissingDataFormat: OSStatus = 932332581
 let StreamConvertingServicesError_EndOfStream: OSStatus = 932332582
 let StreamConvertingServicesError_NoEnoughData: OSStatus = 932332583
 
-public class StreamConvertingServices: NSObject, ConvertingServices {
-    public enum StreamConvertingServicesError: Error {
-        case noAvaliableHardware
-        case hardwareWasOccupied
-        case invailedParser
-        case parserMissDataFormat
-        case formatNotSupported
-        case failedToAllocatePCMBuffer
-        case noEnoughData
-        case endOfStream
-        case otherError(OSStatus)
-    }
-    
+public class StreamConvertingServices: NSObject, ConvertingServices {    
     public weak var parser: ParsingServices?
     
     public var targetFormat: AVAudioFormat
@@ -61,12 +49,12 @@ public class StreamConvertingServices: NSObject, ConvertingServices {
     public required init(_ format: AVAudioFormat, _ parser: ParsingServices) throws {
         guard parser.isReadyToProducePacket else {
             os_log(.error, "[converting] failed to create converter because parser is not ready")
-            throw StreamConvertingServicesError.invailedParser
+            throw ConvertingError.invailedParser
         }
         
         guard let _ = parser.dataFormat else {
             os_log(.error, "[converting] failed to create converter because parser is missing data format")
-            throw StreamConvertingServicesError.parserMissDataFormat
+            throw ConvertingError.parserMissDataFormat
         }
         
         var converter: AudioConverterRef?
@@ -76,13 +64,13 @@ public class StreamConvertingServices: NSObject, ConvertingServices {
         guard result == noErr else {
             if result == kAudioConverterErr_FormatNotSupported {
                 os_log(.error, "[converting] failed to create converter because formats is unconvertable")
-                throw StreamConvertingServicesError.formatNotSupported
+                throw ConvertingError.formatNotSupported
             } else if result == kAudioConverterErr_NoHardwarePermission {
                 os_log(.error, "[converting] failed to create converter because no avaliable hardware")
-                throw StreamConvertingServicesError.noAvaliableHardware
+                throw ConvertingError.noAvaliableHardware
             }
             os_log(.error, "[converting] failed to create converter, error code: %i, desc: %@", result, converterErrorStringDescription(result))
-            throw StreamConvertingServicesError.otherError(result)
+            throw ConvertingError.otherError(result)
         }
         
         // initailze converter
@@ -149,17 +137,17 @@ public class StreamConvertingServices: NSObject, ConvertingServices {
     public func convert(_ frames: AVAudioFrameCount) throws -> AVAudioPCMBuffer {
         guard !self.isConvertingCompeleted else {
             os_log(.error, log:self.logger, "end of stream")
-            throw StreamConvertingServicesError.endOfStream
+            throw ConvertingError.endOfStream
         }
         
         guard self.readOffset < self.avaliablePacketCount else {
             os_log(.error, log:self.logger, "no enough packets to convert")
-            throw StreamConvertingServicesError.noEnoughData
+            throw ConvertingError.noEnoughData
         }
         
         guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: self.targetFormat, frameCapacity: frames) else {
             os_log(.error, log:self.logger, "can not allocate pcm buffer")
-            throw StreamConvertingServicesError.failedToAllocatePCMBuffer
+            throw ConvertingError.failedToAllocatePCMBuffer
         }
         pcmBuffer.frameLength = frames //!!!!!!!!!!!!!!!!!!!!!!!!!! warning warning warning
                                         // you must set this property before using the buffer. The length must be less than or equal to the frameCapacity of the buffer
@@ -179,27 +167,27 @@ public class StreamConvertingServices: NSObject, ConvertingServices {
             switch result {
                 case kAudioConverterErr_FormatNotSupported:
                     os_log(.error, log:self.logger, "got convert error kAudioConverterErr_FormatNotSupported")
-                    throw StreamConvertingServicesError.formatNotSupported
+                    throw ConvertingError.formatNotSupported
                 
                 case kAudioConverterErr_HardwareInUse:
                     os_log(.error, log:self.logger, "got convert error kAudioConverterErr_HardwareInUse")
-                    throw StreamConvertingServicesError.hardwareWasOccupied
+                    throw ConvertingError.hardwareWasOccupied
                 
                 case StreamConvertingServicesError_ParserMissingDataFormat:
                     os_log(.error, log:self.logger, "got convert error StreamConvertingServicesError_ParserMissingDataFormat")
-                    throw StreamConvertingServicesError.parserMissDataFormat
+                    throw ConvertingError.parserMissDataFormat
                 
                 case StreamConvertingServicesError_NoEnoughData:
                     os_log(.error, log:self.logger, "got convert error StreamConvertingServicesError_NoEnoughData")
-                    throw StreamConvertingServicesError.noEnoughData
+                    throw ConvertingError.noEnoughData
                 
                 case StreamConvertingServicesError_EndOfStream:
                     os_log(.error, log:self.logger, "got convert error StreamConvertingServicesError_EndOfStream")
-                    throw StreamConvertingServicesError.endOfStream
+                    throw ConvertingError.endOfStream
                 
                 default:
                     os_log(.error, log:self.logger, "got convert error code: %i, desc: %@", result, converterErrorStringDescription(result))
-                    throw StreamConvertingServicesError.otherError(result)
+                    throw ConvertingError.otherError(result)
             }
             
         }
@@ -210,8 +198,13 @@ public class StreamConvertingServices: NSObject, ConvertingServices {
         return pcmBuffer
     }
     
-    public func seek(to packet: AVAudioPacketCount) {
-        
+    @discardableResult
+    public func seek(to time: TimeInterval) -> Bool {
+        if let packet = self.parser?.packetForTimeInterval(time) {
+            self.readOffset = packet
+            return true
+        }
+        return false
     }
     
 }

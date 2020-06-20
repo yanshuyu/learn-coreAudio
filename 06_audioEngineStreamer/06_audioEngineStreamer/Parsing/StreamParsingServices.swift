@@ -5,17 +5,7 @@ import os.log
 
 
 
-
 public class StreamParsingServices: NSObject, ParsingServices {
-    public enum StreamParsingServicesError: Error {
-        case canNotOpenStream(OSStatus)
-        case invalidFile
-        case unsupportedFileType
-        case unsupportedDataFormat
-        case dataUnavailable
-        case otherError(OSStatus)
-    }
-    
     deinit {
         if let magicCookieData = self.magicCookieData {
             magicCookieData.data?.deallocate()
@@ -58,7 +48,7 @@ public class StreamParsingServices: NSObject, ParsingServices {
             guard result == noErr else {
     
                 os_log(.error,log: self.logger, "parser can't open stream, error code: %i", result)
-                throw StreamParsingServicesError.canNotOpenStream(result)
+                throw ParsingError.canNotOpenStream(result)
             }
         }
         
@@ -69,29 +59,52 @@ public class StreamParsingServices: NSObject, ParsingServices {
                 switch result {
                     case kAudioFileStreamError_UnsupportedFileType:
                         os_log(.error, log: self.logger, "parser got kAudioFileStreamError_UnsupportedFileType error")
-                        throw StreamParsingServicesError.unsupportedFileType
+                        throw ParsingError.unsupportedFileType
                     
                     case kAudioFileStreamError_UnsupportedDataFormat:
                         os_log(.error, log: self.logger, "parser got kAudioFileStreamError_UnsupportedDataFormat error")
-                        throw StreamParsingServicesError.unsupportedDataFormat
+                        throw ParsingError.unsupportedDataFormat
                     
                     case kAudioFileStreamError_InvalidFile:
                         os_log(.error, log: self.logger, "parser got kAudioFileStreamError_InvalidFile error")
-                        throw StreamParsingServicesError.invalidFile
+                        throw ParsingError.invalidFile
                     
                     case kAudioFileStreamError_DataUnavailable:
                         os_log(.error, log: self.logger, "parser got kAudioFileStreamError_DataUnavailable error")
-                        throw StreamParsingServicesError.dataUnavailable
+                        throw ParsingError.dataUnavailable
                     
                     default:
                         os_log(.error, log: self.logger, "parser got os error: %i", result)
-                        throw StreamParsingServicesError.otherError(result)
+                        throw ParsingError.otherError(result)
                 }
             }
         }
     }
     
+    public func timeIntervalForFrameTime(_ frame: AVAudioFramePosition) -> TimeInterval? {
+        guard let totalFrameCount = self.dataFrameCount, let duration = self.duration else {
+            return nil
+        }
+        
+        let ratio = Double(frame) / Double(totalFrameCount)
+        return duration * ratio
+    }
     
+    public func frameTimeForTimeInterval(_ time: TimeInterval) -> AVAudioFramePosition? {
+        guard let totalFrameCount = self.dataFrameCount, let duration = self.duration else {
+            return nil
+        }
+        let ratio = time / duration
+        return AVAudioFramePosition(Double(totalFrameCount) * ratio)
+    }
+    
+    public func packetForTimeInterval(_ time: TimeInterval) -> AVAudioPacketCount? {
+        if let frames = frameTimeForTimeInterval(time), let dataFormat = self.dataFormat, let totalPackCount = self.dataPacketCount {
+            let packetIdx = min(max(Int64(0), frames / Int64(dataFormat.streamDescription.pointee.mFramesPerPacket)), Int64(totalPackCount))
+            return AVAudioPacketCount(packetIdx)
+        }
+        return nil
+    }
 }
 
 

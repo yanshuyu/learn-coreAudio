@@ -2,6 +2,16 @@ import Foundation
 import AVFoundation
 import AudioToolbox
 
+
+public enum ParsingError: Error {
+    case canNotOpenStream(OSStatus)
+    case invalidFile
+    case unsupportedFileType
+    case unsupportedDataFormat
+    case dataUnavailable
+    case otherError(OSStatus)
+}
+
 public protocol ParsingServices: AnyObject {
     var dataFormat: AVAudioFormat? { get }
     var dataByteCount: UInt64? { get }
@@ -18,6 +28,9 @@ public protocol ParsingServices: AnyObject {
     var parsedPackets: [(packetData: Data, packetDesc: AudioStreamPacketDescription?)] { get }
     
     func parseData(_ data: Data) throws
+    func timeIntervalForFrameTime(_ frame: AVAudioFramePosition) -> TimeInterval?
+    func frameTimeForTimeInterval(_ time: TimeInterval) -> AVAudioFramePosition?
+    func packetForTimeInterval(_ time: TimeInterval) -> AVAudioPacketCount?
 }
 
 
