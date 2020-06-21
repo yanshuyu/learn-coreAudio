@@ -18,6 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Override point for customization after application launch.
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback)
+            try AVAudioSession.sharedInstance().setActive(true, options: [])
         } catch  {
             NSLog("failed to set audio session category, error: %@", error.localizedDescription)
         }

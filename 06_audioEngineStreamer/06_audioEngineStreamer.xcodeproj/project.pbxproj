@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		11542C4B249E4AAE0058DB54 /* TimePitchStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11542C4A249E4AAE0058DB54 /* TimePitchStreamer.swift */; };
 		1163F6AC24990A34001BECEB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163F6AB24990A34001BECEB /* AppDelegate.swift */; };
 		1163F6AE24990A34001BECEB /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163F6AD24990A34001BECEB /* SceneDelegate.swift */; };
 		1163F6B024990A34001BECEB /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1163F6AF24990A34001BECEB /* ViewController.swift */; };
@@ -25,6 +26,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		11542C4A249E4AAE0058DB54 /* TimePitchStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimePitchStreamer.swift; sourceTree = "<group>"; };
 		1163F6A824990A34001BECEB /* 06_audioEngineStreamer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = 06_audioEngineStreamer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1163F6AB24990A34001BECEB /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		1163F6AD24990A34001BECEB /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 			children = (
 				1163F6D2249B5649001BECEB /* StreamingServices.swift */,
 				1163F6D4249B6C52001BECEB /* Streamer.swift */,
+				11542C4A249E4AAE0058DB54 /* TimePitchStreamer.swift */,
 			);
 			path = Streaming;
 			sourceTree = "<group>";
@@ -217,6 +220,7 @@
 				1163F6C824990ADD001BECEB /* ParsingServices.swift in Sources */,
 				1163F6C224990A77001BECEB /* StreamDownloadServices.swift in Sources */,
 				1163F6D5249B6C52001BECEB /* Streamer.swift in Sources */,
+				11542C4B249E4AAE0058DB54 /* TimePitchStreamer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

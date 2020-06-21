@@ -111,8 +111,8 @@ public class Streamer: NSObject, StreamingServices {
     
 
     
-    fileprivate var player = AVAudioPlayerNode()
-    fileprivate var engine = AVAudioEngine()
+    internal var player = AVAudioPlayerNode()
+    internal var engine = AVAudioEngine()
     
     fileprivate var downloader: DownloadingServices = StreamDownloadServices()
     fileprivate var parser: ParsingServices = StreamParsingServices()

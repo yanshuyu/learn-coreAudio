@@ -25,18 +25,28 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var loadingIndicator: UIActivityIndicatorView!
     
-    let streamer: StreamingServices = Streamer()
+    @IBOutlet weak var minRateLable: UILabel!
+    @IBOutlet weak var maxRateLable: UILabel!
+    @IBOutlet weak var rateSliderView: UISlider!
+    
+    @IBOutlet weak var minPitchLable: UILabel!
+    @IBOutlet weak var maxPitchLable: UILabel!
+    @IBOutlet weak var pitchSliderView: UISlider!
+    @IBOutlet weak var rateLable: UILabel!
+    @IBOutlet weak var pitchLable: UILabel!
+    
+    
+    let streamer: StreamingServices = TimePitchStreamer()
     var isPlaying: Bool = false
     var isSeeking: Bool = false
     var timer: Timer?
-    
     
    
     override func viewDidLoad() {
         super.viewDidLoad()
         streamer.delegate = self
         streamer.useCache = false
-        streamer.streamURL = URL(string: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+        streamer.streamURL = URL(string: "https://m10.music.126.net/20200621165032/25c1031f88354f859f8bb29a58124d47/ymusic/obj/w5zDlMODwrDDiGjCn8Ky/2879481247/b21a/b97b/fd69/10d9abc926f1602216b5c122c5022dab.mp3")
         
         self.playSliderView.addTarget(self, action: #selector(onPlaySliderSeeking(_:)), for: .touchDragInside)
         self.playSliderView.addTarget(self, action: #selector(onPlaySliderSeeking(_:)), for: .touchDragOutside)
@@ -50,6 +60,33 @@ class ViewController: UIViewController {
         
         self.volumeLable.text = "\(self.streamer.volume)"
         self.volumeSliderView.value = self.streamer.volume
+        
+        if let streamer = self.streamer as? TimePitchStreamer {
+            let minRate: Float = 0.25
+            let maxRate: Float = 4
+            let minPitch: Float = -2400
+            let maxPitch: Float = 2400
+            
+            self.minRateLable.text = "\(minRate)"
+            self.maxRateLable.text = "\(maxRate)"
+            self.rateSliderView.minimumValue = minRate
+            self.rateSliderView.maximumValue = maxRate
+            self.rateSliderView.value = streamer.rate
+            
+            self.minPitchLable.text = "\(minPitch)"
+            self.maxPitchLable.text = "\(maxPitch)"
+            self.pitchSliderView.minimumValue = minPitch
+            self.pitchSliderView.maximumValue = maxPitch
+            self.pitchSliderView.value = streamer.pitch
+            
+            self.rateSliderView.addTarget(self,
+                                          action: #selector(onRateSliderChange(_:)),
+                                          for: .valueChanged)
+            self.pitchSliderView.addTarget(self,
+                                           action: #selector(onPitchSliderChange(_:)),
+                                           for: .valueChanged)
+            
+        }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -89,6 +126,11 @@ class ViewController: UIViewController {
         if !self.isSeeking {
             self.playSliderView.value = playProgress
         }
+        
+        if let _ = self.streamer as? TimePitchStreamer {
+            self.rateLable.text = "\(self.rateSliderView.value)"
+            self.pitchLable.text = "\(self.pitchSliderView.value)"
+        }
     }
     
     @IBAction func onPlayPauseButtonTouch(_ sender: UIButton) {
@@ -118,6 +160,20 @@ class ViewController: UIViewController {
             }
             self.isSeeking = false
         }
+    }
+    
+    
+    @objc func onRateSliderChange(_ sender: UISlider) {
+        if let streamer = self.streamer as? TimePitchStreamer {
+            streamer.rate = sender.value
+        }
+    }
+    
+    @objc func onPitchSliderChange(_ sender: UISlider) {
+        if let streamer = self.streamer as? TimePitchStreamer {
+            streamer.pitch = sender.value
+        }
+        
     }
     
 }
